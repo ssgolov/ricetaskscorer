@@ -156,6 +156,14 @@ td.sc{text-align:right;min-width:72px}
 .rs{font-family:'Unbounded',sans-serif;font-size:.63rem;font-weight:700;color:var(--R);margin-left:3px}
 .strip-save{margin-left:auto}
 
+/* USER SWITCHER */
+.user-switcher{display:flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:4px 8px}
+.user-switcher-label{font-size:.6rem;color:var(--muted);white-space:nowrap}
+.user-select{background:transparent;border:none;color:var(--text);font-family:'Inter',sans-serif;font-size:.68rem;cursor:pointer;outline:none;max-width:160px}
+.user-select option{background:var(--s2);color:var(--text)}
+.user-switcher.manager{border-color:rgba(232,121,249,.4);background:rgba(232,121,249,.06)}
+.user-switcher.manager .user-switcher-label{color:var(--U)}
+
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
@@ -207,6 +215,10 @@ td.sc{text-align:right;min-width:72px}
     <h2>Задачи</h2>
     <span class="chip" id="cnt">0 задач</span>
     <span class="chip blue" id="api-chip"></span>
+    <div class="user-switcher" id="user-switcher" style="display:none">
+      <span class="user-switcher-label" id="user-switcher-label">👤 Сотрудник:</span>
+      <select class="user-select" id="user-select" onchange="switchUser(this.value)"></select>
+    </div>
     <button class="btn" onclick="resetAll()">↩ Другой вебхук</button>
     <button class="btn" onclick="reload()">↻ Обновить</button>
     <div class="save-progress" id="save-progress">
@@ -282,10 +294,13 @@ const STATUS_LABELS={2:'Ждёт',3:'Выполняется',4:'Контроль
 
 // ── STATE ──
 let webhookUrl = '';
+let currentUserId = null;
+let selfId = null;        // ID of the webhook owner
+let allUsers = [];        // all portal users for manager switcher
 let tasks = [];
 let sortOn = true;
 let activeFilters = new Set(['rev','found','cx','ops','none']);
-let pendingSave = new Set(); // task ids with unsaved changes
+let pendingSave = new Set();
 
 // ── INIT: load saved webhook ──
 window.onload = () => {
@@ -308,16 +323,22 @@ async function connect() {
   hideWhError();
 
   try {
-    // Quick test call
-    const test = await bx(url, 'app.info', {});
-    if (test.error) throw new Error(test.error_description || test.error);
+    // Get current user profile — resolves ID automatically for any user
+    const profile = await bx(url, 'profile', {});
+    if (profile.error) throw new Error(profile.error_description || profile.error);
+    if (!profile.result?.ID) throw new Error('Не удалось получить профиль пользователя');
 
+    currentUserId = profile.result.ID;
+    selfId = profile.result.ID;
     webhookUrl = url;
+
     if (document.getElementById('wh-remember').checked) {
       localStorage.setItem('rice_webhook', url);
     }
 
     showLoading();
+    // Try to load all users (for manager mode); non-blocking if no rights
+    await loadUsers();
     await loadTasks();
   } catch(e) {
     showWhError('Не удалось подключиться: ' + e.message);
@@ -338,7 +359,45 @@ async function bx(baseUrl, method, params) {
   return resp.json();
 }
 
-// ── LOAD TASKS ──
+// ── LOAD USERS (for manager mode) ──
+async function loadUsers() {
+  try {
+    allUsers = [];
+    let start = 0;
+    while (true) {
+      const data = await bx(webhookUrl, 'user.get', {
+        filter: {ACTIVE: true},
+        select: ['ID','NAME','LAST_NAME','SECOND_NAME'],
+        start,
+      });
+      if (data.error) break; // no rights — silently skip
+      const list = data.result || [];
+      allUsers.push(...list);
+      start += 50;
+      if (list.length < 50) break;
+    }
+  } catch(e) {
+    allUsers = []; // no rights or error — manager mode just won't show
+  }
+}
+
+// ── SWITCH USER ──
+async function switchUser(userId) {
+  currentUserId = userId;
+  const sw = document.getElementById('user-switcher');
+  const label = document.getElementById('user-switcher-label');
+  if (userId === selfId) {
+    sw.classList.remove('manager');
+    label.textContent = '👤 Сотрудник:';
+  } else {
+    sw.classList.add('manager');
+    label.textContent = '👁 Режим руководителя:';
+  }
+  showLoading('Загружаем задачи…');
+  await loadTasks();
+}
+
+
 async function loadTasks() {
   showLoading('Загружаем задачи из Битрикса…');
   tasks = [];
@@ -351,7 +410,6 @@ async function loadTasks() {
     UF.r, UF.i, UF.c, UF.e, UF.u, UF.type, UF.rice,
   ];
 
-  const MY_ID = 9;
   const seen = new Set();
 
   // Fetch all pages for a given filter
@@ -375,9 +433,9 @@ async function loadTasks() {
   }
 
   setLoadingSub('Загружаем задачи где вы исполнитель…');
-  const asAssignee = await fetchAll({RESPONSIBLE_ID: MY_ID});
+  const asAssignee = await fetchAll({RESPONSIBLE_ID: currentUserId});
   setLoadingSub('Загружаем задачи где вы постановщик…');
-  const asCreator  = await fetchAll({CREATED_BY: MY_ID});
+  const asCreator  = await fetchAll({CREATED_BY: currentUserId});
 
   const allRaw = [...asAssignee, ...asCreator];
   total = allRaw.length;
@@ -704,11 +762,34 @@ function showMain() {
     const domain = new URL(webhookUrl).hostname;
     document.getElementById('api-chip').textContent = '🔗 ' + domain;
   } catch(e) {}
+  // User switcher — show only if we got users and there are more than 1
+  const sw = document.getElementById('user-switcher');
+  const sel = document.getElementById('user-select');
+  if (allUsers.length > 1) {
+    sel.innerHTML = allUsers
+      .sort((a,b) => {
+        const na = (a.LAST_NAME+' '+a.NAME).trim();
+        const nb = (b.LAST_NAME+' '+b.NAME).trim();
+        return na.localeCompare(nb, 'ru');
+      })
+      .map(u => {
+        const name = [u.LAST_NAME, u.NAME].filter(Boolean).join(' ') || `ID ${u.ID}`;
+        const selected = u.ID === currentUserId ? ' selected' : '';
+        return `<option value="${u.ID}"${selected}>${esc(name)}</option>`;
+      }).join('');
+    sw.style.display = 'flex';
+  } else {
+    sw.style.display = 'none';
+  }
   render();
 }
 function resetAll() {
   tasks = [];
   webhookUrl = '';
+  currentUserId = null;
+  selfId = null;
+  allUsers = [];
+  document.getElementById('user-switcher').style.display = 'none';
   document.getElementById('main').style.display = 'none';
   document.getElementById('loading-zone').style.display = 'none';
   document.getElementById('webhook-zone').style.display = 'flex';
