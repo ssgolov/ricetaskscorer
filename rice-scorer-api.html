@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RICE Scorer · Битрикс 24 API</title>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0d0f14; --s1:#161920; --s2:#1e2230; --s3:#252a3a;
+  --border:#2a2f3e; --text:#e8eaf2; --muted:#6b7280;
+  --R:#7c75ff; --I:#ff7a7a; --C:#f59e0b; --E:#34d399;
+  --U:#e879f9; --T:#38bdf8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── HEADER ── */
+header{padding:20px 36px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.logo{font-family:'Unbounded',sans-serif;font-size:.95rem;font-weight:800;letter-spacing:-.03em}
+.logo span{background:linear-gradient(120deg,var(--R),var(--I),var(--C),var(--E));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header-sub{font-size:.65rem;color:var(--muted);margin-top:2px}
+.legend{display:flex;gap:6px;flex-wrap:wrap}
+.lp{font-size:.6rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:4px;display:flex;align-items:center;gap:4px}
+.lp .d{width:4px;height:4px;border-radius:50%}
+.lp.R{color:var(--R);background:rgba(124,117,255,.08);border:1px solid rgba(124,117,255,.2)}.lp.R .d{background:var(--R)}
+.lp.I{color:var(--I);background:rgba(255,122,122,.08);border:1px solid rgba(255,122,122,.2)}.lp.I .d{background:var(--I)}
+.lp.C{color:var(--C);background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)}.lp.C .d{background:var(--C)}
+.lp.E{color:var(--E);background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.2)}.lp.E .d{background:var(--E)}
+.lp.U{color:var(--U);background:rgba(232,121,249,.08);border:1px solid rgba(232,121,249,.2)}.lp.U .d{background:var(--U)}
+
+/* ── WEBHOOK SCREEN ── */
+#webhook-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:72vh;padding:40px 24px;animation:fadeUp .5s ease}
+.webhook-box{width:100%;max-width:520px;background:var(--s1);border:1px solid var(--border);border-radius:18px;padding:40px;position:relative;overflow:hidden}
+.webhook-box::after{content:'';position:absolute;inset:0;border-radius:18px;background:radial-gradient(ellipse at 50% 110%,rgba(124,117,255,.12) 0%,transparent 65%);pointer-events:none}
+.webhook-icon{font-size:2rem;margin-bottom:12px;display:block}
+.webhook-box h2{font-family:'Unbounded',sans-serif;font-size:.9rem;font-weight:700;margin-bottom:6px}
+.webhook-box p{font-size:.72rem;color:var(--muted);line-height:1.7;margin-bottom:20px}
+.wh-input-wrap{position:relative;margin-bottom:10px}
+.wh-input{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-family:'Inter',sans-serif;font-size:.8rem;outline:none;transition:border-color .2s}
+.wh-input:focus{border-color:var(--R)}
+.wh-input::placeholder{color:var(--muted)}
+.wh-input.err{border-color:var(--I)}
+.wh-hint{font-size:.65rem;color:var(--muted);margin-bottom:18px;line-height:1.6}
+.wh-hint a{color:var(--R);text-decoration:none}
+.btn-connect{width:100%;background:linear-gradient(120deg,var(--R),#5b54d4);border:none;border-radius:8px;padding:12px;color:#fff;font-family:'Unbounded',sans-serif;font-size:.75rem;font-weight:700;cursor:pointer;transition:opacity .2s;letter-spacing:.02em}
+.btn-connect:hover{opacity:.85}
+.btn-connect:disabled{opacity:.45;cursor:not-allowed}
+.wh-error{font-size:.68rem;color:var(--I);margin-top:8px;display:none}
+.wh-error.show{display:block}
+.wh-remember{display:flex;align-items:center;gap:6px;margin-bottom:16px;cursor:pointer}
+.wh-remember input{accent-color:var(--R);cursor:pointer}
+.wh-remember span{font-size:.68rem;color:var(--muted)}
+
+/* ── LOADING ── */
+#loading-zone{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--R);border-radius:50%;animation:spin .7s linear infinite}
+.loading-text{font-size:.75rem;color:var(--muted)}
+.loading-sub{font-size:.63rem;color:var(--muted);opacity:.6}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── MAIN ── */
+#main{display:none;padding:18px 36px 100px;animation:fadeUp .4s ease}
+@media(max-width:1000px){#main{padding:10px 6px 100px}header{padding:14px 12px}}
+
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.toolbar h2{font-family:'Unbounded',sans-serif;font-size:.78rem;font-weight:600}
+.chip{background:var(--s2);border:1px solid var(--border);border-radius:20px;font-size:.65rem;color:var(--muted);padding:2px 9px}
+.chip.green{border-color:rgba(52,211,153,.3);color:var(--E);background:rgba(52,211,153,.06)}
+.chip.blue{border-color:rgba(56,189,248,.3);color:var(--T);background:rgba(56,189,248,.06)}
+.btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 11px;border-radius:5px;font-size:.68rem;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s}
+.btn:hover{border-color:var(--I);color:var(--I)}
+.btn-save{background:rgba(124,117,255,.12);border:1px solid rgba(124,117,255,.35);color:var(--R);padding:5px 14px;border-radius:5px;font-size:.68rem;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;transition:all .2s}
+.btn-save:hover{background:rgba(124,117,255,.22);border-color:var(--R)}
+.btn-save:disabled{opacity:.4;cursor:not-allowed}
+.sort-toggle{background:var(--s2);border:1px solid var(--border);color:var(--muted);padding:5px 11px;border-radius:5px;font-size:.68rem;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;margin-left:auto}
+.sort-toggle.on{border-color:var(--R);color:var(--R);background:rgba(124,117,255,.1)}
+
+/* SAVE PROGRESS */
+.save-progress{display:none;align-items:center;gap:8px;font-size:.68rem;color:var(--muted)}
+.save-progress.show{display:flex}
+.save-bar{width:120px;height:4px;background:var(--s3);border-radius:2px;overflow:hidden}
+.save-bar-fill{height:100%;background:linear-gradient(90deg,var(--R),var(--I));border-radius:2px;width:0%;transition:width .3s}
+
+/* FILTER BAR */
+.filter-bar{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filter-label{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+.filt{background:var(--s2);border:1px solid var(--border);color:var(--muted);padding:3px 9px;border-radius:20px;font-size:.66rem;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;white-space:nowrap}
+.filt.on-rev{border-color:#f97316;color:#f97316;background:rgba(249,115,22,.1)}
+.filt.on-found{border-color:#818cf8;color:#818cf8;background:rgba(129,140,248,.1)}
+.filt.on-cx{border-color:#34d399;color:#34d399;background:rgba(52,211,153,.1)}
+.filt.on-ops{border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.1)}
+
+/* TABLE */
+.tw{overflow-x:auto;border-radius:12px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;min-width:1060px}
+thead th{background:var(--s2);padding:8px 9px;text-align:left;font-size:.58rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap}
+thead th.hR{color:var(--R)}thead th.hI{color:var(--I)}thead th.hC{color:var(--C)}thead th.hE{color:var(--E)}thead th.hU{color:var(--U)}thead th.hT{color:var(--T)}thead th.hS{text-align:right;color:var(--text)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.017)}
+tbody tr.ranked1{background:rgba(124,117,255,.05);border-left:2px solid var(--R)}
+tbody tr.hidden{display:none}
+tbody tr.saving{opacity:.5}
+tbody tr.saved{background:rgba(52,211,153,.04)}
+td{padding:7px 9px;vertical-align:middle}
+td.tn{min-width:160px;max-width:220px}
+.tn-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:210px;font-size:.76rem;font-weight:500}
+.badge{display:inline-block;font-size:.56rem;font-weight:500;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.bw{background:rgba(245,158,11,.1);color:#f59e0b}.ba{background:rgba(52,211,153,.1);color:#34d399}.bd{background:rgba(100,116,139,.1);color:#94a3b8}
+.bp{background:rgba(124,117,255,.08);color:#9d96ff;font-size:.52rem;margin-top:2px}
+.saved-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--E);margin-left:5px;vertical-align:middle;flex-shrink:0;opacity:0;transition:opacity .3s}
+.saved-dot.show{opacity:1}
+
+/* SEGMENT BUTTONS */
+.sg-wrap{display:flex;gap:2px}
+.sg{background:var(--s3);border:1px solid var(--border);color:var(--muted);padding:4px 6px;border-radius:4px;font-size:.64rem;cursor:pointer;font-family:'Inter',sans-serif;transition:all .12s;white-space:nowrap;user-select:none;line-height:1}
+.sg:hover{border-color:#4a4f62;color:var(--text)}
+.sg.onR{background:rgba(124,117,255,.18);border-color:var(--R);color:var(--R);font-weight:600}
+.sg.onI{background:rgba(255,122,122,.18);border-color:var(--I);color:var(--I);font-weight:600}
+.sg.onC{background:rgba(245,158,11,.18);border-color:var(--C);color:var(--C);font-weight:600}
+.sg.onE{background:rgba(52,211,153,.18);border-color:var(--E);color:var(--E);font-weight:600}
+.sg.onU{background:rgba(232,121,249,.18);border-color:var(--U);color:var(--U);font-weight:600}
+
+/* TYPE BUTTONS */
+.type-wrap{display:flex;gap:2px;flex-wrap:wrap}
+.type-btn{background:var(--s3);border:1px solid var(--border);color:var(--muted);padding:4px 6px;border-radius:4px;font-size:.62rem;cursor:pointer;font-family:'Inter',sans-serif;transition:all .12s;white-space:nowrap;user-select:none;line-height:1}
+.type-btn:hover{border-color:#4a4f62;color:var(--text)}
+.type-btn.on-rev{background:rgba(249,115,22,.18);border-color:#f97316;color:#f97316;font-weight:600}
+.type-btn.on-found{background:rgba(129,140,248,.18);border-color:#818cf8;color:#818cf8;font-weight:600}
+.type-btn.on-cx{background:rgba(52,211,153,.18);border-color:#34d399;color:#34d399;font-weight:600}
+.type-btn.on-ops{background:rgba(96,165,250,.18);border-color:#60a5fa;color:#60a5fa;font-weight:600}
+
+/* SCORE */
+td.sc{text-align:right;min-width:72px}
+.sv{font-family:'Unbounded',sans-serif;font-size:.9rem;font-weight:800;color:var(--muted);transition:all .3s;white-space:nowrap}
+.sv.lit{background:linear-gradient(120deg,var(--R),var(--I));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.st{font-size:.55rem;color:var(--muted);margin-top:1px}
+
+/* TOAST */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font-size:.75rem;font-weight:600;display:none;z-index:200;backdrop-filter:blur(8px);white-space:nowrap}
+#toast.ok{background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.4);color:var(--E)}
+#toast.err{background:rgba(255,122,122,.15);border:1px solid rgba(255,122,122,.4);color:var(--I)}
+#toast.show{display:block;animation:fadeUp .3s ease}
+
+/* RANK STRIP */
+#rstrip{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(13,15,20,.96);backdrop-filter:blur(14px);border-top:1px solid var(--border);padding:9px 28px;display:none;align-items:center;gap:12px;flex-wrap:wrap}
+#rstrip.show{display:flex}
+.rl{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+.ri-wrap{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.ri{display:flex;align-items:center;gap:4px;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:4px 7px;cursor:pointer;transition:border-color .2s}
+.ri:hover{border-color:var(--R)}
+.rp{font-family:'Unbounded',sans-serif;font-size:.58rem;font-weight:800;min-width:12px}
+.rp.g{color:#ffd700}.rp.s{color:#c0c0c0}.rp.b{color:#cd7f32}.rp.d{color:var(--muted)}
+.rn{font-size:.63rem;max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs{font-family:'Unbounded',sans-serif;font-size:.63rem;font-weight:700;color:var(--R);margin-left:3px}
+.strip-save{margin-left:auto}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo"><span>RICE SCORER</span></div>
+    <div class="header-sub" id="header-sub">Приоритизация задач · Битрикс 24 API</div>
+  </div>
+  <div class="legend">
+    <div class="lp R"><span class="d"></span>R Охват</div>
+    <div class="lp I"><span class="d"></span>I Влияние</div>
+    <div class="lp C"><span class="d"></span>C Уверенность</div>
+    <div class="lp E"><span class="d"></span>E Усилие</div>
+    <div class="lp U"><span class="d"></span>U Срочность ×</div>
+  </div>
+</header>
+
+<!-- WEBHOOK -->
+<div id="webhook-zone">
+  <div class="webhook-box">
+    <span class="webhook-icon">🔗</span>
+    <h2>Подключение к Битрикс 24</h2>
+    <p>Введите URL входящего вебхука. Найти его можно в Битрикс 24 → Приложения → Вебхуки → Входящий вебхук (нужны права на Задачи).</p>
+    <div class="wh-input-wrap">
+      <input class="wh-input" id="wh-input" type="text" placeholder="https://ВАШ.bitrix24.ru/rest/9/ключ/" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="wh-hint">Вебхук нигде не сохраняется и не передаётся — работает только в браузере.</div>
+    <label class="wh-remember">
+      <input type="checkbox" id="wh-remember" checked>
+      <span>Запомнить в этом браузере</span>
+    </label>
+    <button class="btn-connect" id="btn-connect" onclick="connect()">Загрузить задачи →</button>
+    <div class="wh-error" id="wh-error"></div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-zone">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Загружаем задачи из Битрикса…</div>
+  <div class="loading-sub" id="loading-sub"></div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div class="toolbar">
+    <h2>Задачи</h2>
+    <span class="chip" id="cnt">0 задач</span>
+    <span class="chip blue" id="api-chip"></span>
+    <button class="btn" onclick="resetAll()">↩ Другой вебхук</button>
+    <button class="btn" onclick="reload()">↻ Обновить</button>
+    <div class="save-progress" id="save-progress">
+      <div class="save-bar"><div class="save-bar-fill" id="save-bar-fill"></div></div>
+      <span id="save-progress-text"></span>
+    </div>
+    <button class="btn-save" id="btn-save" onclick="saveAll()">💾 Сохранить в Битрикс</button>
+    <button class="sort-toggle on" id="sortbtn" onclick="toggleSort()">Сортировка по RICE ↓</button>
+  </div>
+
+  <div class="filter-bar">
+    <span class="filter-label">Тип:</span>
+    <button class="filt on-rev"   id="f-rev"   onclick="toggleFilter('rev')">💰 Выручка</button>
+    <button class="filt on-found" id="f-found" onclick="toggleFilter('found')">🏗️ Фундамент</button>
+    <button class="filt on-cx"    id="f-cx"    onclick="toggleFilter('cx')">🎯 Клиентский опыт</button>
+    <button class="filt on-ops"   id="f-ops"   onclick="toggleFilter('ops')">🔧 Операционная</button>
+    <button class="filt" id="f-none" onclick="toggleFilter('none')">— Без типа</button>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th style="width:24px">#</th>
+        <th>Задача</th>
+        <th class="hR">R <span style="opacity:.45;font-weight:400">Охват</span></th>
+        <th class="hI">I <span style="opacity:.45;font-weight:400">Влияние</span></th>
+        <th class="hC">C <span style="opacity:.45;font-weight:400">Уверенность</span></th>
+        <th class="hE">E <span style="opacity:.45;font-weight:400">Усилие</span></th>
+        <th class="hU">U <span style="opacity:.45;font-weight:400">Срочность</span></th>
+        <th class="hT">Тип задачи</th>
+        <th class="hS">RICE</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="rstrip">
+  <span class="rl">Топ приоритеты:</span>
+  <div class="ri-wrap" id="ri-wrap"></div>
+  <button class="btn-save strip-save" onclick="saveAll()">💾 Сохранить в Битрикс</button>
+</div>
+
+<script>
+// ── FIELD MAP ──
+const UF = {
+  r:    'UF_AUTO_363132444836',
+  i:    'UF_AUTO_364337472363',
+  c:    'UF_AUTO_849821800439',
+  e:    'UF_AUTO_275647175856',
+  u:    'UF_AUTO_823861836203',
+  type: 'UF_AUTO_676289618874',
+  rice: 'UF_AUTO_467252203135',
+};
+
+// ── OPTIONS ──
+const ROPTS=[{v:1,l:'1',t:'Единицы'},{v:2,l:'2',t:'Несколько'},{v:3,l:'3',t:'Заметная часть'},{v:4,l:'4',t:'Большинство'},{v:5,l:'5',t:'Все'}];
+const IOPTS=[{v:0.25,l:'0.25',t:'Минимальное'},{v:0.5,l:'0.5',t:'Низкое'},{v:1,l:'1',t:'Среднее'},{v:2,l:'2',t:'Высокое'},{v:3,l:'3×',t:'Масштабный'}];
+const COPTS=[{v:20,l:'20%',t:'Очень сомневаюсь'},{v:50,l:'50%',t:'Примерно так'},{v:80,l:'80%',t:'Достаточно уверен'},{v:100,l:'100%',t:'Уверен'}];
+const EOPTS=[{v:0.5,l:'Легко',t:'Час–день'},{v:1,l:'Средне',t:'Несколько дней'},{v:2,l:'Сложно',t:'Неделя+'}];
+const UOPTS=[{v:1.5,l:'Сейчас',t:'Ценность тает — действуй немедленно ×1.5'},{v:1,l:'Скоро',t:'Актуально в ближайшие недели ×1'},{v:0.5,l:'Потом',t:'Не горит, можно отложить ×0.5'}];
+const TYPES=[{k:'rev',l:'💰 Выручка',cls:'on-rev'},{k:'found',l:'🏗️ Фундамент',cls:'on-found'},{k:'cx',l:'🎯 Клиент',cls:'on-cx'},{k:'ops',l:'🔧 Операц.',cls:'on-ops'}];
+
+const EFFORT_IMPORT={'Легко':0.5,'Средне':1,'Сложно':2,'легко':0.5,'средне':1,'сложно':2};
+const URGENCY_IMPORT={'Сейчас':1.5,'Скоро':1,'Потом':0.5,'сейчас':1.5,'скоро':1,'потом':0.5};
+const TYPE_IMPORT={'Выручка':'rev','Фундамент':'found','Клиент':'cx','Клиентский опыт':'cx','Операционная':'ops','Операц.':'ops'};
+const EFFORT_EXPORT={0.5:'Легко',1:'Средне',2:'Сложно'};
+const URGENCY_EXPORT={1.5:'Сейчас',1:'Скоро',0.5:'Потом'};
+const TYPE_EXPORT={rev:'Выручка',found:'Фундамент',cx:'Клиентский опыт',ops:'Операционная'};
+const STATUS_LABELS={2:'Ждёт',3:'Выполняется',4:'Контроль',6:'Отложена'};
+
+// ── STATE ──
+let webhookUrl = '';
+let tasks = [];
+let sortOn = true;
+let activeFilters = new Set(['rev','found','cx','ops','none']);
+let pendingSave = new Set(); // task ids with unsaved changes
+
+// ── INIT: load saved webhook ──
+window.onload = () => {
+  const saved = localStorage.getItem('rice_webhook');
+  if (saved) document.getElementById('wh-input').value = saved;
+};
+
+// ── CONNECT ──
+async function connect() {
+  const raw = document.getElementById('wh-input').value.trim();
+  if (!raw) { showWhError('Введите URL вебхука'); return; }
+
+  // Normalize URL
+  let url = raw;
+  if (!url.endsWith('/')) url += '/';
+
+  const btn = document.getElementById('btn-connect');
+  btn.disabled = true;
+  btn.textContent = 'Подключаемся…';
+  hideWhError();
+
+  try {
+    // Quick test call
+    const test = await bx(url, 'app.info', {});
+    if (test.error) throw new Error(test.error_description || test.error);
+
+    webhookUrl = url;
+    if (document.getElementById('wh-remember').checked) {
+      localStorage.setItem('rice_webhook', url);
+    }
+
+    showLoading();
+    await loadTasks();
+  } catch(e) {
+    showWhError('Не удалось подключиться: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Загрузить задачи →';
+  }
+}
+
+// ── BITRIX API CALL ──
+async function bx(baseUrl, method, params) {
+  const url = baseUrl + method;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(params),
+  });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
+
+// ── LOAD TASKS ──
+async function loadTasks() {
+  showLoading('Загружаем задачи из Битрикса…');
+  tasks = [];
+  let start = 0;
+  let total = null;
+
+  const selectFields = [
+    'ID','TITLE','STATUS','GROUP_ID','GROUP',
+    'RESPONSIBLE_ID','DEADLINE','CREATED_DATE',
+    UF.r, UF.i, UF.c, UF.e, UF.u, UF.type, UF.rice,
+  ];
+
+  const MY_ID = 9;
+  const seen = new Set();
+
+  // Fetch all pages for a given filter
+  async function fetchAll(filter) {
+    const results = [];
+    let s = 0;
+    while (true) {
+      const data = await bx(webhookUrl, 'tasks.task.list', {
+        filter: {'!REAL_STATUS': 5, ...filter},
+        select: selectFields,
+        order: {ID: 'desc'},
+        start: s,
+      });
+      if (data.error) throw new Error(data.error_description || data.error);
+      const list = data.result?.tasks || [];
+      results.push(...list);
+      s += 50;
+      if (list.length < 50) break;
+    }
+    return results;
+  }
+
+  setLoadingSub('Загружаем задачи где вы исполнитель…');
+  const asAssignee = await fetchAll({RESPONSIBLE_ID: MY_ID});
+  setLoadingSub('Загружаем задачи где вы постановщик…');
+  const asCreator  = await fetchAll({CREATED_BY: MY_ID});
+
+  const allRaw = [...asAssignee, ...asCreator];
+  total = allRaw.length;
+
+  for (const t of allRaw) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+
+    const rRaw = t[camel(UF.r)];
+    const iRaw = t[camel(UF.i)];
+    const cRaw = t[camel(UF.c)];
+    const eRaw = t[camel(UF.e)];
+    const uRaw = t[camel(UF.u)];
+    const typeRaw = t[camel(UF.type)];
+
+    const r = rRaw !== null && rRaw !== '' ? parseFloat(rRaw) : null;
+    const i = iRaw !== null && iRaw !== '' ? parseFloat(iRaw) : null;
+    const c = cRaw !== null && cRaw !== '' ? parseFloat(cRaw) : null;
+    const e = eRaw ? (EFFORT_IMPORT[eRaw] ?? (parseFloat(eRaw)||null)) : null;
+    const u = uRaw ? (URGENCY_IMPORT[uRaw] ?? (parseFloat(uRaw)||null)) : null;
+    const type = typeRaw ? (TYPE_IMPORT[typeRaw] || null) : null;
+
+    tasks.push({
+      id: t.id,
+      name: t.title || `Задача ${t.id}`,
+      status: STATUS_LABELS[t.status] || t.status || '—',
+      project: t.group?.name || '',
+      r, i, c, e, u, type,
+      _dirty: false,
+      _saved: false,
+    });
+  }
+  setLoadingSub(`Загружено ${tasks.length} задач`);
+
+  pendingSave.clear();
+  showMain();
+}
+
+// ── CAMEL CASE CONVERTER for UF fields ──
+// Bitrix returns UF_AUTO_123 as ufAuto123
+function camel(fieldName) {
+  return fieldName.toLowerCase().replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+// ── SAVE ALL DIRTY TASKS ──
+async function saveAll() {
+  const dirty = tasks.filter(t => t._dirty);
+  if (!dirty.length) { toast('Нет изменений для сохранения', 'ok'); return; }
+
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  const prog = document.getElementById('save-progress');
+  const fill = document.getElementById('save-bar-fill');
+  const progText = document.getElementById('save-progress-text');
+  prog.classList.add('show');
+
+  let done = 0;
+  let errors = 0;
+
+  for (const t of dirty) {
+    const tr = document.querySelector(`[data-id="${t.id}"]`);
+    if (tr) tr.classList.add('saving');
+
+    const sc = score(t);
+    const fields = {};
+    fields[UF.r] = t.r !== null ? String(t.r) : '';
+    fields[UF.i] = t.i !== null ? String(t.i) : '';
+    fields[UF.c] = t.c !== null ? String(t.c) : '';
+    fields[UF.e] = t.e !== null ? (EFFORT_EXPORT[t.e] ?? String(t.e)) : '';
+    fields[UF.u] = t.u !== null ? (URGENCY_EXPORT[t.u] ?? String(t.u)) : '';
+    fields[UF.type] = t.type !== null ? (TYPE_EXPORT[t.type] ?? t.type) : '';
+    fields[UF.rice] = sc !== null ? String(sc) : '';
+
+    try {
+      const res = await bx(webhookUrl, 'tasks.task.update', {
+        taskId: t.id,
+        fields,
+      });
+      if (res.error) throw new Error(res.error);
+      t._dirty = false;
+      t._saved = true;
+      if (tr) { tr.classList.remove('saving'); tr.classList.add('saved'); }
+      const dot = tr?.querySelector('.saved-dot');
+      if (dot) dot.classList.add('show');
+    } catch(e) {
+      errors++;
+      if (tr) tr.classList.remove('saving');
+    }
+
+    done++;
+    fill.style.width = Math.round(done / dirty.length * 100) + '%';
+    progText.textContent = `${done}/${dirty.length}`;
+  }
+
+  btn.disabled = false;
+  setTimeout(() => { prog.classList.remove('show'); fill.style.width = '0%'; }, 2000);
+
+  if (errors === 0) {
+    toast(`✓ Сохранено ${done} задач в Битрикс 24`, 'ok');
+  } else {
+    toast(`⚠ Сохранено ${done - errors} из ${done}, ошибок: ${errors}`, 'err');
+  }
+}
+
+// ── RELOAD ──
+async function reload() {
+  if (!webhookUrl) return;
+  showLoading();
+  try { await loadTasks(); }
+  catch(e) { showMain(); toast('Ошибка загрузки: ' + e.message, 'err'); }
+}
+
+// ── RENDER ──
+function render() {
+  const list = sortOn ? [...tasks].sort((a,b) => (score(b)||0) - (score(a)||0)) : tasks;
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  let visRank = 0;
+
+  list.forEach(t => {
+    const sc = score(t);
+    const tr = document.createElement('tr');
+    tr.dataset.id = t.id;
+    const inFilter = t.type ? activeFilters.has(t.type) : activeFilters.has('none');
+    if (!inFilter) tr.classList.add('hidden');
+    else {
+      visRank++;
+      if (visRank === 1 && sc !== null) tr.classList.add('ranked1');
+    }
+    if (t._saved) tr.classList.add('saved');
+
+    tr.innerHTML = `
+      <td style="color:var(--muted);font-size:.6rem;font-weight:600">${inFilter ? visRank : '—'}</td>
+      <td class="tn">
+        <span style="display:flex;align-items:center;gap:2px">
+          <span class="tn-text" title="${esc(t.name)}">${esc(t.name)}</span>
+          <span class="saved-dot${t._saved?' show':''}" title="Сохранено в Битрикс"></span>
+        </span>
+        <div style="margin-top:2px;display:flex;gap:3px;flex-wrap:wrap">
+          <span style="font-size:.52rem;color:var(--muted);font-family:monospace">#${t.id}</span>
+          <span class="badge ${scls(t.status)}">${t.status}</span>
+          ${t.project ? `<span class="badge bp">${esc(t.project)}</span>` : ''}
+        </div>
+      </td>
+      <td>${segs(t.id,'r',ROPTS,'R')}</td>
+      <td>${segs(t.id,'i',IOPTS,'I')}</td>
+      <td>${segs(t.id,'c',COPTS,'C')}</td>
+      <td>${segs(t.id,'e',EOPTS,'E')}</td>
+      <td>${segs(t.id,'u',UOPTS,'U')}</td>
+      <td>${typeSegs(t.id)}</td>
+      <td class="sc">
+        <div class="sv${sc!==null?' lit':''}" id="sv-${t.id}">${sc!==null ? String(sc) : '—'}</div>
+        <div class="st" id="st-${t.id}">${tier(sc)}</div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  strip();
+  updateSaveBtn();
+}
+
+function segs(id, f, opts, col) {
+  const t = tasks.find(x => x.id === id);
+  return `<div class="sg-wrap">${opts.map(o =>
+    `<span class="sg${t[f]===o.v?' on'+col:''}" title="${o.t||''}" onclick="pick('${id}','${f}',${o.v},'${col}')">${o.l}</span>`
+  ).join('')}</div>`;
+}
+
+function typeSegs(id) {
+  const t = tasks.find(x => x.id === id);
+  return `<div class="type-wrap">${TYPES.map(o =>
+    `<span class="type-btn${t.type===o.k?' '+o.cls:''}" onclick="pickType('${id}','${o.k}')">${o.l}</span>`
+  ).join('')}</div>`;
+}
+
+function pick(id, f, v, col) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  t[f] = t[f] === v ? null : v;
+  t._dirty = true;
+  refreshRow(id);
+  strip();
+  updateSaveBtn();
+  if (sortOn) reorder();
+}
+
+function pickType(id, k) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  t.type = t.type === k ? null : k;
+  t._dirty = true;
+  refreshRow(id);
+  applyFilters();
+  strip();
+  updateSaveBtn();
+}
+
+function refreshRow(id) {
+  const t = tasks.find(x => x.id === id);
+  const tr = document.querySelector(`[data-id="${id}"]`);
+  if (!tr) return;
+  const tds = tr.querySelectorAll('td');
+  tds[2].innerHTML = segs(id,'r',ROPTS,'R');
+  tds[3].innerHTML = segs(id,'i',IOPTS,'I');
+  tds[4].innerHTML = segs(id,'c',COPTS,'C');
+  tds[5].innerHTML = segs(id,'e',EOPTS,'E');
+  tds[6].innerHTML = segs(id,'u',UOPTS,'U');
+  tds[7].innerHTML = typeSegs(id);
+  const sc = score(t);
+  const sv = document.getElementById('sv-'+id);
+  sv.textContent = sc !== null ? String(sc) : '—';
+  sv.className = 'sv' + (sc !== null ? ' lit' : '');
+  document.getElementById('st-'+id).textContent = tier(sc);
+}
+
+function reorder() {
+  const sorted = [...tasks].sort((a,b) => (score(b)||0) - (score(a)||0));
+  const tbody = document.getElementById('tbody');
+  let visRank = 0;
+  sorted.forEach(t => {
+    const tr = document.querySelector(`[data-id="${t.id}"]`);
+    if (!tr) return;
+    tbody.appendChild(tr);
+    const inFilter = t.type ? activeFilters.has(t.type) : activeFilters.has('none');
+    if (inFilter) {
+      visRank++;
+      tr.querySelectorAll('td')[0].textContent = visRank;
+      tr.classList.toggle('ranked1', visRank===1 && score(t)!==null);
+    }
+  });
+}
+
+function applyFilters() {
+  let visRank = 0;
+  for (const tr of document.querySelectorAll('#tbody tr')) {
+    const id = tr.dataset.id;
+    const t = tasks.find(x => x.id === id);
+    if (!t) continue;
+    const inFilter = t.type ? activeFilters.has(t.type) : activeFilters.has('none');
+    tr.classList.toggle('hidden', !inFilter);
+    if (inFilter) {
+      visRank++;
+      tr.querySelectorAll('td')[0].textContent = visRank;
+      tr.classList.toggle('ranked1', visRank===1 && score(t)!==null);
+    }
+  }
+}
+
+function toggleFilter(key) {
+  if (activeFilters.has(key)) activeFilters.delete(key);
+  else activeFilters.add(key);
+  const map = {rev:'f-rev',found:'f-found',cx:'f-cx',ops:'f-ops',none:'f-none'};
+  const clsMap = {rev:'on-rev',found:'on-found',cx:'on-cx',ops:'on-ops'};
+  const btn = document.getElementById(map[key]);
+  if (btn) {
+    const cls = clsMap[key];
+    if (activeFilters.has(key) && cls) btn.classList.add(cls);
+    else if (cls) btn.classList.remove(cls);
+  }
+  applyFilters();
+  strip();
+}
+
+function updateSaveBtn() {
+  const dirty = tasks.filter(t => t._dirty).length;
+  const btn = document.getElementById('btn-save');
+  if (dirty > 0) {
+    btn.textContent = `💾 Сохранить в Битрикс (${dirty})`;
+  } else {
+    btn.textContent = '💾 Сохранить в Битрикс';
+  }
+}
+
+// ── SCORE ──
+function score(t) {
+  if (t.r===null||t.i===null||t.c===null||t.e===null) return null;
+  const u = t.u !== null ? t.u : 1;
+  return Math.round((t.r * t.i * (t.c/100) * u) / t.e * 10);
+}
+function tier(sc) {
+  if (sc===null) return '';
+  if (sc>=100) return '🔥 Топ приоритет';
+  if (sc>=40)  return '⚡ Высокий';
+  if (sc>=10)  return '✅ Средний';
+  return '💤 Низкий';
+}
+
+// ── RANK STRIP ──
+function strip() {
+  const sc = tasks.filter(t => score(t)!==null).sort((a,b) => score(b)-score(a));
+  const el = document.getElementById('rstrip');
+  if (!sc.length) { el.classList.remove('show'); return; }
+  el.classList.add('show');
+  const pc = ['g','s','b','d','d'];
+  document.getElementById('ri-wrap').innerHTML = sc.slice(0,5).map((t,i) =>
+    `<div class="ri" onclick="jumpTo('${t.id}')">
+      <span class="rp ${pc[i]}">#${i+1}</span>
+      <span class="rn">${esc(t.name)}</span>
+      <span class="rs">${String(score(t))}</span>
+    </div>`
+  ).join('');
+}
+function jumpTo(id) {
+  document.querySelector(`[data-id="${id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// ── UI STATE ──
+function showLoading(text, sub) {
+  document.getElementById('webhook-zone').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+  const lz = document.getElementById('loading-zone');
+  lz.style.display = 'flex';
+  if (text) document.getElementById('loading-text').textContent = text;
+  if (sub) document.getElementById('loading-sub').textContent = sub;
+}
+function setLoadingSub(text) {
+  document.getElementById('loading-sub').textContent = text;
+}
+function showMain() {
+  document.getElementById('loading-zone').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('cnt').textContent = tasks.length + ' задач';
+  // Show domain in chip
+  try {
+    const domain = new URL(webhookUrl).hostname;
+    document.getElementById('api-chip').textContent = '🔗 ' + domain;
+  } catch(e) {}
+  render();
+}
+function resetAll() {
+  tasks = [];
+  webhookUrl = '';
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('loading-zone').style.display = 'none';
+  document.getElementById('webhook-zone').style.display = 'flex';
+  document.getElementById('rstrip').classList.remove('show');
+  document.getElementById('wh-error').classList.remove('show');
+  document.getElementById('btn-connect').disabled = false;
+  document.getElementById('btn-connect').textContent = 'Загрузить задачи →';
+}
+function showWhError(msg) {
+  const el = document.getElementById('wh-error');
+  el.textContent = msg;
+  el.classList.add('show');
+  document.getElementById('wh-input').classList.add('err');
+}
+function hideWhError() {
+  document.getElementById('wh-error').classList.remove('show');
+  document.getElementById('wh-input').classList.remove('err');
+}
+
+// ── TOAST ──
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.className = type, 3500);
+}
+
+// ── UTIL ──
+function toggleSort() {
+  sortOn = !sortOn;
+  const b = document.getElementById('sortbtn');
+  b.classList.toggle('on', sortOn);
+  b.textContent = sortOn ? 'Сортировка по RICE ↓' : 'Порядок из Битрикса';
+  render();
+}
+function scls(s) {
+  if (!s) return 'bw';
+  if (/выполн/i.test(s)) return 'ba';
+  if (/закрыт|завершён|выполнен/i.test(s)) return 'bd';
+  return 'bw';
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Enter key on webhook input
+document.getElementById('wh-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') connect();
+});
+</script>
+</body>
+</html>
